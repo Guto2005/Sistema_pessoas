@@ -1,63 +1,40 @@
 <?php
-header('Content-Type: application/json');
-require('database.php'); // Inclua aqui a sua conexão com o banco de dados usando PDO
+require('./database.php');
 
 $metodo = strtoupper($_SERVER['REQUEST_METHOD']);
 
 if ($metodo === 'PUT') {
-    // Obter e decodificar JSON do corpo da requisição
-    $data = json_decode(file_get_contents('php://input'), true);
+    parse_str(file_get_contents("php://input"), $put);
 
-    // Verificar se json_decode conseguiu decodificar o JSON
-    if ($data === null) {
-        echo json_encode(['error' => 'Erro ao decodificar JSON']);
-        http_response_code(400);
-        exit;
-    }
+    $id = filter_var($put['id'] ?? null, FILTER_VALIDATE_INT);
+    $nome = $put['nome'] ?? null;
+    $endereco = $put['endereco'] ?? null;
 
-    // Verificar se todos os dados necessários estão presentes
-    if (!isset($data['id']) || !isset($data['nome']) || !isset($data['endereco'])) {
-        echo json_encode(['error' => 'Dados insuficientes']);
-        http_response_code(400);
-        exit;
-    }
+    if ($id && $nome && $endereco) {
+        $sql = $pdo->prepare("SELECT * FROM pessoas WHERE id = :id");
+        $sql->bindValue(":id", $id);
+        $sql->execute();
 
-    $id = filter_var($data['id'], FILTER_VALIDATE_INT);
-    $nome = filter_var($data['nome'], FILTER_SANITIZE_STRING);
-    $endereco = filter_var($data['endereco'], FILTER_SANITIZE_STRING);
+        if ($sql->rowCount() > 0) {
+            $sql = $pdo->prepare("UPDATE pessoas SET nome = :nome, endereco = :endereco WHERE id = :id");
+            $sql->bindValue(':id', $id);
+            $sql->bindValue(':nome', $nome);
+            $sql->bindValue(':endereco', $endereco);
+            $sql->execute();
 
-    if ($id === false || empty($nome) || empty($endereco)) {
-        echo json_encode(['error' => 'Parâmetros nulos ou inválidos']);
-        http_response_code(400);
-        exit;
-    }
-
-    try {
-        // Preparar a consulta para atualizar os dados da pessoa
-        $query = "UPDATE pessoas SET nome = :nome, endereco = :endereco WHERE id = :id";
-        $stmt = $pdo->prepare($query);
-        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-        $stmt->bindValue(':nome', $nome, PDO::PARAM_STR);
-        $stmt->bindValue(':endereco', $endereco, PDO::PARAM_STR);
-
-        if ($stmt->execute()) {
-            echo json_encode(['message' => 'Pessoa alterada com sucesso']);
+            $array['result'] = [
+                "id" => $id,
+                "nome" => $nome,
+                "endereco" => $endereco
+            ];
         } else {
-            echo json_encode(['error' => 'Erro ao alterar pessoa']);
-            http_response_code(500);
+            $array['error'] = 'Erro: Id inexistente!';
         }
-    } catch (PDOException $e) {
-        echo json_encode(['error' => 'Erro na consulta: ' . $e->getMessage()]);
-        http_response_code(500);
+    } else {
+        $array['error'] = 'Erro: Valores nulos ou inválidos!';
     }
 } else {
-    echo json_encode(['error' => 'Método inválido - apenas PUT é permitido']);
-    http_response_code(405);
+    $array['error'] = 'Erro: Método inválido - Apenas PUT é permitido.';
 }
 
-$pdo = null; // Fechar a conexão com o banco de dados
-
-require('return.php');
-?>
-
-
+require('./return.php');
